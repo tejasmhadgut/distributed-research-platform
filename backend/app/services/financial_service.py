@@ -5,30 +5,34 @@ from app.models.financial_data import CompanyMetrics
 
 
 def _fetch_yfinance(ticker: str) -> dict:
+    import time
     stock = yf.Ticker(ticker)
 
     hist = stock.history(period="1mo")
     price_data = {
         "history": hist.reset_index().to_dict(orient="records") if not hist.empty else []
     }
+    time.sleep(2)
 
     try:
-        info = stock.info
+        fast = stock.fast_info
         price_data.update({
-            "current_price": info.get("currentPrice"),
-            "market_cap": info.get("marketCap"),
-            "pe_ratio": info.get("trailingPE"),
-            "52w_high": info.get("fiftyTwoWeekHigh"),
-            "52w_low": info.get("fiftyTwoWeekLow"),
+            "current_price": fast.get("lastPrice"),
+            "market_cap": fast.get("marketCap"),
+            "52w_high": fast.get("yearHigh"),
+            "52w_low": fast.get("yearLow"),
         })
+        info = dict(fast)
     except Exception:
         info = {}
+    time.sleep(2)
 
     try:
         income_stmt = stock.income_stmt
         income_data = income_stmt.to_dict() if income_stmt is not None and not income_stmt.empty else {}
     except Exception:
         income_data = {}
+    time.sleep(2)
 
     try:
         balance = stock.balance_sheet
