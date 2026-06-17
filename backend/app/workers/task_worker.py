@@ -1,16 +1,22 @@
 import asyncio
 import json
 import aio_pika
-from sqlalchemy import select, update
+from sqlalchemy import update
 from app.core.database import AsyncSessionLocal
 from app.core.config import settings
+from app.core.redis_client import publish_workflow_event
 from app.models.workflow import WorkflowTask
+from app.services.financial_service import fetch_and_store_metrics
+from app.services.edgar_service import fetch_and_store_filings
+
 
 async def handle_task(message: aio_pika.IncomingMessage) -> None:
     async with message.process():
         payload = json.loads(message.body)
         task_id = payload["task_id"]
         task_type = payload["task_type"]
+        workflow_run_id = payload["workflow_run_id"]
+        input_data = payload.get("input_data", {})
 
         async with AsyncSessionLocal() as db:
             await db.execute(
@@ -20,25 +26,56 @@ async def handle_task(message: aio_pika.IncomingMessage) -> None:
             )
             await db.commit()
 
-        try:
-            result = await execute_task(task_type, payload.get("input_data", {}))
-            await db.execute(
-                update(WorkflowTask)
-                .where(WorkflowTask.id == task_id)
-                .values(status="completed", result=result)
-            )
-        except Exception as e:
-            await db.execute(
+            await publish_workflow_event(workflow_run_id, {
+                "task_id": task_id,
+                "task_type": task_type,
+                "status": "running"
+            })
+
+            try:
+                result = await execute_task(db, task_type, input_data)
+                final_status = "completed"
+                await db.execute(
+                    update(WorkflowTask)
+                    .where(WorkflowTask.id == task_id)
+                    .values(status="completed", result=result)
+                )
+            except Exception as e:
+                final_status = "failed"
+                await db.execute(
                     update(WorkflowTask)
                     .where(WorkflowTask.id == task_id)
                     .values(status="failed", error=str(e))
                 )
-        await db.commit()
-            
 
-async def execute_task(task_type: str, input_data: dict) -> dict:
-    await asyncio.sleep(1)
-    return {"task_type": task_type, "status": "simulated", "input": input_data}
+            await db.commit()
+
+            await publish_workflow_event(workflow_run_id, {
+                "task_id": task_id,
+                "task_type": task_type,
+                "status": final_status
+            })
+
+
+async def execute_task(db, task_type: str, input_data: dict) -> dict:
+    ticker = input_data.get("ticker", "AAPL")
+
+    if task_type == "fetch_metrics":
+        metrics = await fetch_and_store_metrics(db, ticker)
+        return {"metrics_id": metrics.id, "ticker": metrics.ticker}
+
+    if task_type == "search_filings":
+        filings = await fetch_and_store_filings(db, ticker)
+        return {"filing_ids": [f.id for f in filings], "ticker": ticker}
+
+    if task_type == "analyze_data":
+        return {"status": "analyzed", "ticker": ticker}
+
+    if task_type == "generate_report":
+        return {"status": "report_generated", "ticker": ticker}
+
+    return {"status": "unknown_task_type", "task_type": task_type}
+
 
 async def main() -> None:
     connection = await aio_pika.connect_robust(settings.rabbitmq_url)
