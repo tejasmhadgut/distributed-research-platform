@@ -3,7 +3,26 @@ from sqlalchemy import select, update
 from app.core.database import AsyncSessionLocal
 from app.core.queue import publish_task
 from app.models.workflow import WorkflowRun, WorkflowTask
+from app.core.redis_client import publish_workflow_event
 
+async def dispatch_task(db, task: WorkflowTask, run_id: int) -> None:
+    await db.execute(
+        update(WorkflowTask)
+        .where(WorkflowTask.id == task.id)
+        .values(status="queued")
+    )
+    await db.commit()
+    await publish_task("research_tasks", {
+        "task_id": task.id,
+        "task_type": task.task_type,
+        "workflow_run_id": run_id,
+        "input_data": task.input_data
+    })
+    await publish_workflow_event(run_id, {
+        "task_id": task.id,
+        "task_type": task.task_type,
+        "status": "queued"
+    })
 
 async def dispatch_ready_tasks() -> None:
     async with AsyncSessionLocal() as db:
@@ -28,6 +47,7 @@ async def dispatch_ready_tasks() -> None:
                     update(WorkflowRun).where(WorkflowRun.id == run.id).values(status="completed")
                 )
                 await db.commit()
+                await publish_workflow_event(run.id, {"status": "completed"})
                 continue
 
             if any_failed:
@@ -35,6 +55,7 @@ async def dispatch_ready_tasks() -> None:
                     update(WorkflowRun).where(WorkflowRun.id == run.id).values(status="failed")
                 )
                 await db.commit()
+                await publish_workflow_event(run.id, {"status": "failed"})
                 continue
             
             for task in tasks:
@@ -42,11 +63,7 @@ async def dispatch_ready_tasks() -> None:
                     continue
                 deps_met = all(dep_id in completed_ids for dep_id in task.dependencies)
                 if deps_met:
-                    await db.execute(
-                        update(WorkflowTask)
-                        .where(WorkflowTask.id == task.id)
-                        .values(status="queued")
-                    )
+                    await dispatch_task(db, task, run.id)
                     await db.commit()
                     await publish_task("research_tasks", {
                         "task_id": task.id,
