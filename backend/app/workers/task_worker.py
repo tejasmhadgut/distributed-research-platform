@@ -8,6 +8,7 @@ from app.core.redis_client import publish_workflow_event
 from app.models.workflow import WorkflowTask
 from app.services.financial_service import fetch_and_store_metrics
 from app.services.edgar_service import fetch_and_store_filings
+from app.services.document_service import embed_filing
 
 
 async def handle_task(message: aio_pika.IncomingMessage) -> None:
@@ -73,6 +74,18 @@ async def execute_task(db, task_type: str, input_data: dict) -> dict:
 
     if task_type == "generate_report":
         return {"status": "report_generated", "ticker": ticker}
+    if task_type == "embed_filings":
+        from sqlalchemy import select
+        from app.models.financial_data import SECFiling
+        result = await db.execute(
+            select(SECFiling).where(SECFiling.ticker == ticker).order_by(SECFiling.id.desc())
+        )
+        filings = result.scalars().all()
+        total_chunks = 0
+        for filing in filings:
+            chunks = await embed_filing(db, filing)
+            total_chunks += len(chunks)
+        return {"ticker": ticker, "chunks_stored": total_chunks}
 
     return {"status": "unknown_task_type", "task_type": task_type}
 
