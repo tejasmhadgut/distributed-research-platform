@@ -2,15 +2,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.workflow import WorkflowRun, WorkflowTask
 
-
 WORKFLOW_DEFINITIONS = {
     "compare_companies": [
         {"task_type": "fetch_metrics", "dependencies": [], "input_key": "companies"},
         {"task_type": "search_filings", "dependencies": [], "input_key": "companies"},
-        {"task_type": "analyze_data",  "dependencies": ["fetch_metrics", "search_filings"],"input_type":None},
-        {"task_type":"generate_report",  "dependencies": ["analyze_data"], "input_key": None},
-    ]
+        {"task_type": "analyze_data", "dependencies": ["fetch_metrics", "search_filings"], "input_type": None},
+        {"task_type": "generate_report", "dependencies": ["analyze_data"], "input_key": None},
+    ],
+    "embed_filings": [
+        {"task_type": "embed_filings", "dependencies": [], "input_key": "ticker"},
+    ],
 }
+
 
 async def create_workflow(
     db: AsyncSession,
