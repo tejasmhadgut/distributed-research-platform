@@ -1,10 +1,12 @@
-import httpx
+import asyncio
+import ollama as ol
 
-OLLAMA_URL = "https://localhost:11434/api/embeddings"
 EMBED_MODEL = "nomic-embed-text"
 
-async def embed_text(text:str) -> list[float]:
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp =await client.post(OLLAMA_URL, json={"model":EMBED_MODEL, "prompt":"text"})
-        resp.raise_for_status()
-        return resp.json()["embedding"]
+
+async def embed_text(text: str) -> list[float]:
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None, lambda: ol.embeddings(model=EMBED_MODEL, prompt=text)
+    )
+    return response["embedding"]

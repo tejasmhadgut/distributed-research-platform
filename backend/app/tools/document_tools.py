@@ -21,9 +21,9 @@ async def search_document_chunks(input: SearchInput, db) -> dict:
     result = await db.execute(
         text(
             "SELECT id, ticker, chunk_index, text, "
-            "1 - (embedding <=> :vec::vector) AS similarity "
+            "1 - (embedding <=> CAST(:vec AS vector)) AS similarity "
             "FROM document_chunks WHERE ticker = :ticker "
-            "ORDER BY embedding <=> :vec::vector LIMIT :limit"
+            "ORDER BY embedding <=> CAST(:vec AS vector) LIMIT :limit"
         ),
         {"vec": vector_str, "ticker": input.ticker, "limit": input.limit},
     )
