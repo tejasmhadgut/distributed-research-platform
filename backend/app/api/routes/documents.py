@@ -22,13 +22,11 @@ async def search_chunks(req: SearchRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         text(
             "SELECT id, ticker, chunk_index, text, "
-            "1 - (embedding <=> :vec::vector) AS similarity "
-            "FROM document_chunks "
-            "WHERE ticker = :ticker "
-            "ORDER BY embedding <=> :vec::vector "
-            "LIMIT :limit"
+            "1 - (embedding <=> CAST(:vec AS vector)) AS similarity "
+            "FROM document_chunks WHERE ticker = :ticker "
+            "ORDER BY embedding <=> CAST(:vec AS vector) LIMIT :limit"
         ),
-        {"vec": vector_str, "ticker": req.ticker, "limit": req.limit},
+        {"vec": vector_str, "ticker": input.ticker, "limit": input.limit},
     )
     rows = result.mappings().all()
     return {"results": [dict(r) for r in rows]}
