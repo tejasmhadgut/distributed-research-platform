@@ -1,23 +1,22 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
-from app.core.database import get_db
-from app.models.document import DocumentChunk
-from app.services.embedding_service import embed_text
 from pydantic import BaseModel
+from app.tools.registry import tool
+from app.services.embedding_service import embed_text
+from sqlalchemy import text
 
-router = APIRouter(prefix="/documents", tags=["documents"])
 
-
-class SearchRequest(BaseModel):
+class SearchInput(BaseModel):
     query: str
     ticker: str
     limit: int = 5
 
 
-@router.post("/search")
-async def search_chunks(req: SearchRequest, db: AsyncSession = Depends(get_db)):
-    vector = await embed_text(req.query)
+@tool(
+    name="search_document_chunks",
+    description="Semantic search over embedded SEC filing chunks for a ticker using a natural language query.",
+    input_schema=SearchInput,
+)
+async def search_document_chunks(input: SearchInput, db) -> dict:
+    vector = await embed_text(input.query)
     vector_str = "[" + ",".join(str(v) for v in vector) + "]"
     result = await db.execute(
         text(

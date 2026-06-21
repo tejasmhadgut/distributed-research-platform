@@ -86,6 +86,13 @@ async def execute_task(db, task_type: str, input_data: dict) -> dict:
             chunks = await embed_filing(db, filing)
             total_chunks += len(chunks)
         return {"ticker": ticker, "chunks_stored": total_chunks}
+    if task_type == "research":
+        from app.services.research_service import run_research
+        question = input_data.get("question", "Analyze this company")
+        ticker = input_data.get("ticker", "AAPL")
+        result = await run_research(db, question, ticker)
+        return result
+
 
     return {"status": "unknown_task_type", "task_type": task_type}
 
