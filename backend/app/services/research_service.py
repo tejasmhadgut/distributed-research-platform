@@ -4,6 +4,8 @@ from app.services.llm_service import chat, parse_tool_call
 from app.tools.registry import list_tools, call_tool
 import app.tools.financial_tools  # noqa: F401
 import app.tools.document_tools   # noqa: F401
+import hashlib
+from app.core.cache import cache_get, cache_set, cache_delete
 
 MAX_TURNS = 6
 
@@ -29,6 +31,10 @@ Do NOT invent tool names. Do NOT add any text outside the JSON."""
 
 
 async def run_research(db: AsyncSession, question: str, ticker: str) -> dict:
+    cache_key = f"research:{ticker.upper()}:{hashlib.md5(question.encode()).hexdigest()}"
+    cached_result = await cache_get(cache_key)
+    if cached_result is not None:
+        return cached_result
     messages = [
         {"role": "system", "content": _system_prompt()},
         {"role": "user", "content": f"Research question: {question}\nTicker: {ticker}"},
@@ -53,7 +59,7 @@ async def run_research(db: AsyncSession, question: str, ticker: str) -> dict:
         except Exception as e:
             await db.rollback()
             result = {"error": str(e)}
-            
+
         observation = f"Tool: {tool_name}\nInput: {json.dumps(tool_input)}\nResult: {json.dumps(result)}"
         observations.append(observation)
         messages.append({"role": "user", "content": f"Tool result:\n{observation}\n\nContinue researching or respond with {{\"done\": true}} if you have enough information."})
@@ -65,10 +71,7 @@ async def run_research(db: AsyncSession, question: str, ticker: str) -> dict:
 
     report = chat(synthesis_messages)
 
-    return {
-        "question": question,
-        "ticker": ticker,
-        "turns": turn + 1,
-        "observations": observations,
-        "report": report,
-    }
+    result = {"question": question, "ticker": ticker, "turns": turn + 1, "observations": observations, "report": report}
+    await cache_set(cache_key, result, ttl=21600)
+    return result
+
