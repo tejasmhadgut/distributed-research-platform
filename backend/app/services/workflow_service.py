@@ -15,6 +15,10 @@ WORKFLOW_DEFINITIONS = {
     "research": [
         {"task_type": "research", "dependencies": [], "input_key": "ticker"},
     ],
+        "quant": [
+        {"task_type": "quant", "dependencies": [], "input_key": "ticker"},
+    ],
+
 
 }
 
