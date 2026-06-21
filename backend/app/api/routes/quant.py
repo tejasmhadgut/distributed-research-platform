@@ -30,9 +30,4 @@ async def get_quant(ticker: str, db: AsyncSession = Depends(get_db)):
     result = await get_latest_quant(db, ticker.upper())
     if not result:
         raise HTTPException(status_code=404, detail=f"No quant results for {ticker}")
-    return {
-        "id": result.id,
-        "ticker": result.ticker,
-        "computed_at": result.computed_at,
-        "metrics": result.metrics,
-    }
+    return result

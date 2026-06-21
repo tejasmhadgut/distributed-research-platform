@@ -2,6 +2,10 @@ import asyncio
 import yfinance as yf
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.financial_data import CompanyMetrics
+from app.core.cache import cache_delete
+from app.core.cache_decorator import cached
+from app.models.financial_data import CompanyMetrics
+from sqlalchemy import select, desc
 
 
 def _fetch_yfinance(ticker: str) -> dict:
@@ -62,4 +66,25 @@ async def fetch_and_store_metrics(db: AsyncSession, ticker: str) -> CompanyMetri
     db.add(metrics)
     await db.commit()
     await db.refresh(metrics)
+    await cache_delete(f"metrics:{ticker.upper()}")
     return metrics
+
+
+@cached(key_fn=lambda db, ticker: f"metrics:{ticker.upper()}", ttl=3600)
+async def get_cached_metrics(db: AsyncSession, ticker: str) -> dict | None:
+    result = await db.execute(
+        select(CompanyMetrics)
+        .where(CompanyMetrics.ticker == ticker.upper())
+        .order_by(desc(CompanyMetrics.fetched_at))
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    return {
+        "ticker": row.ticker,
+        "fetched_at": str(row.fetched_at),
+        "price_data": row.price_data,
+        "income_statement": row.income_statement,
+        "balance_sheet": row.balance_sheet,
+    }
