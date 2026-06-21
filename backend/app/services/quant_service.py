@@ -2,6 +2,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from app.models.financial_data import CompanyMetrics
 from app.models.quant import QuantResult
+from app.core.cache import cache_delete
+from app.core.cache_decorator import cached
 
 
 def _safe_float(value) -> float | None:
@@ -80,14 +82,25 @@ async def compute_quant(db: AsyncSession, ticker: str) -> QuantResult:
     db.add(quant)
     await db.commit()
     await db.refresh(quant)
+    await cache_delete(f"quant:{ticker.upper()}")
     return quant
 
 
-async def get_latest_quant(db: AsyncSession, ticker: str) -> QuantResult | None:
+
+@cached(key_fn=lambda db, ticker: f"quant:{ticker.upper()}", ttl=3600)
+async def get_latest_quant(db: AsyncSession, ticker: str) -> dict | None:
     result = await db.execute(
         select(QuantResult)
-        .where(QuantResult.ticker == ticker)
+        .where(QuantResult.ticker == ticker.upper())
         .order_by(desc(QuantResult.computed_at))
         .limit(1)
     )
-    return result.scalar_one_or_none()
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    return {
+        "id": row.id,
+        "ticker": row.ticker,
+        "computed_at": str(row.computed_at),
+        "metrics": row.metrics,
+    }

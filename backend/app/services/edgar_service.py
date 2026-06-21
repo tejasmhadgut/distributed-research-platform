@@ -1,6 +1,11 @@
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.financial_data import SECFiling
+from app.core.cache import cache_delete
+from app.core.cache_decorator import cached
+from app.models.financial_data import SECFiling
+from sqlalchemy import select, desc
+from sqlalchemy.ext.asyncio import AsyncSession
 
 EDGAR_HEADERS = {"User-Agent": "research-platform contact@example.com"}
 _COMPANY_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
@@ -60,5 +65,28 @@ async def fetch_and_store_filings(
         await db.commit()
         await db.refresh(filing)
         filings.append(filing)
-
+    await cache_delete(f"filings:{ticker.upper()}:{form_type}")
     return filings
+
+
+@cached(key_fn=lambda db, ticker, form_type="10-K": f"filings:{ticker.upper()}:{form_type}", ttl=86400)
+async def get_cached_filings(db: AsyncSession, ticker: str, form_type: str = "10-K") -> list | None:
+    result = await db.execute(
+        select(SECFiling)
+        .where(SECFiling.ticker == ticker.upper(), SECFiling.form_type == form_type)
+        .order_by(desc(SECFiling.fetched_at))
+        .limit(5)
+    )
+    rows = result.scalars().all()
+    if not rows:
+        return None
+    return [
+        {
+            "id": r.id,
+            "ticker": r.ticker,
+            "form_type": r.form_type,
+            "filed_at": r.filed_at,
+            "filing_url": r.filing_url,
+        }
+        for r in rows
+    ]
