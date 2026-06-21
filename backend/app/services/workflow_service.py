@@ -12,6 +12,10 @@ WORKFLOW_DEFINITIONS = {
     "embed_filings": [
         {"task_type": "embed_filings", "dependencies": [], "input_key": "ticker"},
     ],
+    "research": [
+        {"task_type": "research", "dependencies": [], "input_key": "ticker"},
+    ],
+
 }
 
 
