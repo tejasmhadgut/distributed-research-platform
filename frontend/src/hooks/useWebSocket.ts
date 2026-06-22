@@ -11,8 +11,9 @@ export function useWebSocket(sessionId: number | null) {
     if (!sessionId) return
 
     const token = localStorage.getItem("token")
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
     const socket = new WebSocket(
-      `ws://localhost:8000/ws/session/${sessionId}?token=${token}`
+      `${protocol}//${window.location.host}/ws/session/${sessionId}?token=${token}`
     )
     ws.current = socket
 
@@ -76,15 +77,21 @@ export function useWebSocket(sessionId: number | null) {
     }
   }, [sessionId])
 
-  const send = useCallback((question: string, ticker: string) => {
+  const send = useCallback((question: string, ticker: string, tickers?: string[]) => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return
-    ws.current.send(JSON.stringify({ question, ticker }))
+    ws.current.send(JSON.stringify({ question, ticker, tickers }))
+    const label =
+      tickers && tickers.length > 1
+        ? `[${tickers.join(" vs ")}] ${question}`
+        : ticker
+        ? `[${ticker.toUpperCase()}] ${question}`
+        : question
     setMessages((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
         role: "user",
-        content: ticker ? `[${ticker.toUpperCase()}] ${question}` : question,
+        content: label,
         created_at: new Date().toISOString(),
       },
     ])

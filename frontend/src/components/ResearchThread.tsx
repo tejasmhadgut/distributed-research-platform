@@ -15,8 +15,11 @@ export default function ResearchThread({ messages, loading }: Props) {
 
   if (messages.length === 0 && !loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-        Send a query to start researching.
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8">
+        <p className="text-muted-foreground text-sm">Ask a research question to get started.</p>
+        <p className="text-muted-foreground text-xs">
+          Try: <span className="text-foreground">Is AAPL fairly valued?</span> or use Compare mode to analyse two companies side by side.
+        </p>
       </div>
     )
   }
