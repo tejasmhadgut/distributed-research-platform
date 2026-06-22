@@ -8,6 +8,8 @@ from app.api.routes.tools import router as tools_router
 from app.api.routes.research import router as research_router
 from app.api.routes.quant import router as quant_router
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.core.logging import setup_logging
+setup_logging()
 
 
 app = FastAPI(title="Distributed Research Platform")
