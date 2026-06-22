@@ -88,14 +88,21 @@ async def execute_task(db, task_type: str, input_data: dict, workflow_run_id: in
             chunks = await embed_filing(db, filing)
             total_chunks += len(chunks)
         return {"ticker": ticker, "chunks_stored": total_chunks}
-    if task_type == "research":
-        from app.services.research_service import run_research
-        question = input_data.get("question", "Analyze this company")
-        ticker = input_data.get("ticker", "AAPL")
-        context = input_data.get("context", [])
-        result = await run_research(db, question, ticker, context=context or None, workflow_run_id=workflow_run_id)
-        return result
+    if task_type == "quant":
+        from app.services.quant_service import compute_quant
+        result_obj = await compute_quant(db, ticker)
+        return {"ticker": result_obj.ticker, "metrics": result_obj.metrics}
 
+    if task_type == "research":
+        from app.services.research_service import run_research, run_comparison
+        question = input_data.get("question", "Analyze this company")
+        tickers = input_data.get("tickers", [])
+        context = input_data.get("context", [])
+        if tickers and len(tickers) > 1:
+            result = await run_comparison(db, question, tickers, context=context or None, workflow_run_id=workflow_run_id)
+        else:
+            result = await run_research(db, question, ticker, context=context or None, workflow_run_id=workflow_run_id)
+        return result
 
     return {"status": "unknown_task_type", "task_type": task_type}
 
