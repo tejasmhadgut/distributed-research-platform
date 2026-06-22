@@ -64,6 +64,7 @@ async def session_ws(
                 data = await websocket.receive_json()
                 question = data.get("question", "")
                 ticker = data.get("ticker", "")
+                tickers = data.get("tickers", [])
 
                 prior_runs_result = await db.execute(
                     select(WorkflowRun)
@@ -84,10 +85,12 @@ async def session_ws(
                     if pt and pt.result and pt.result.get("report"):
                         context.append({"question": pr.question, "report": pt.result["report"]})
 
-                run = await create_workflow(
-                    db, session_id, question, "research",
-                    {"question": question, "ticker": ticker, "context": context},
-                )
+                if tickers and len(tickers) > 1:
+                    input_data = {"question": question, "tickers": tickers, "context": context}
+                else:
+                    input_data = {"question": question, "ticker": ticker, "context": context}
+
+                run = await create_workflow(db, session_id, question, "research", input_data)
                 await websocket.send_json({"type": "workflow_started", "workflow_run_id": run.id})
 
                 pubsub = r.pubsub()

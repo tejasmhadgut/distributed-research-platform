@@ -137,8 +137,13 @@ export default function DataPanel({ ticker }: { ticker: string }) {
       </div>
 
       {loading && (
-        <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
-          Loading data…
+        <div className="flex-1 px-4 pt-4 space-y-4">
+          {[80, 60, 90, 50, 70, 65].map((w, i) => (
+            <div key={i} className="flex flex-col gap-1.5">
+              <div className="h-2 w-16 rounded bg-muted animate-pulse" />
+              <div className={`h-3 rounded bg-muted animate-pulse`} style={{ width: `${w}%` }} />
+            </div>
+          ))}
         </div>
       )}
 

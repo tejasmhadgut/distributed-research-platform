@@ -16,13 +16,18 @@ export default function WorkspacePage() {
   const currentSession = sessions.find((s) => s.id === id)
   const [currentTicker, setCurrentTicker] = useState<string | null>(null)
 
-  const handleSend = useCallback((question: string, ticker: string) => {
+  const handleSend = useCallback((question: string, ticker: string, tickers?: string[]) => {
     if (id && messages.length === 0) {
-      const label = ticker ? `[${ticker.toUpperCase()}] ${question}` : question
+      const label =
+        tickers && tickers.length > 1
+          ? `[${tickers.join(" vs ")}] ${question}`
+          : ticker
+          ? `[${ticker.toUpperCase()}] ${question}`
+          : question
       updateTitle(id, label.slice(0, 60))
     }
     if (ticker) setCurrentTicker(ticker.toUpperCase())
-    send(question, ticker)
+    send(question, ticker, tickers)
   }, [id, messages.length, send, updateTitle])
 
   useEffect(() => {
