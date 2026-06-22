@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import text
 from app.core.database import get_db
-from app.models.document import DocumentChunk
 from app.services.embedding_service import embed_text
 from pydantic import BaseModel
 
@@ -26,7 +25,7 @@ async def search_chunks(req: SearchRequest, db: AsyncSession = Depends(get_db)):
             "FROM document_chunks WHERE ticker = :ticker "
             "ORDER BY embedding <=> CAST(:vec AS vector) LIMIT :limit"
         ),
-        {"vec": vector_str, "ticker": input.ticker, "limit": input.limit},
+        {"vec": vector_str, "ticker": req.ticker, "limit": req.limit},
     )
     rows = result.mappings().all()
     return {"results": [dict(r) for r in rows]}
