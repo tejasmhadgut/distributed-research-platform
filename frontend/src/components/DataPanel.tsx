@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import api from "../lib/api"
@@ -20,6 +20,13 @@ interface Filing {
 
 interface QuantData {
   metrics: Record<string, number | string | null>
+}
+
+interface SearchResult {
+  id: number
+  chunk_index: number
+  text: string
+  similarity: number
 }
 
 function fmt(n: number | null | undefined, decimals = 2): string {
@@ -49,6 +56,10 @@ export default function DataPanel({ ticker }: { ticker: string }) {
   const [filings, setFilings] = useState<Filing[]>([])
   const [quant, setQuant] = useState<QuantData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!ticker) return
@@ -56,18 +67,56 @@ export default function DataPanel({ ticker }: { ticker: string }) {
     setMetrics(null)
     setFilings([])
     setQuant(null)
+    setSearchResults([])
+    setSearchQuery("")
+
+    const fetchQuant = async () => {
+      try {
+        const r = await api.get(`/api/v1/quant/${ticker}`)
+        return r.data
+      } catch (e: any) {
+        if (e?.response?.status === 404) {
+          try {
+            await api.post("/api/v1/quant/", { ticker })
+            const r = await api.get(`/api/v1/quant/${ticker}`)
+            return r.data
+          } catch {
+            return null
+          }
+        }
+        return null
+      }
+    }
 
     Promise.all([
       api.get(`/api/v1/financial/metrics/${ticker}`).catch(() => null),
       api.get(`/api/v1/financial/filings/${ticker}`).catch(() => null),
-      api.get(`/api/v1/quant/${ticker}`).catch(() => null),
+      fetchQuant(),
     ]).then(([m, f, q]) => {
       if (m) setMetrics(m.data)
       if (f) setFilings(f.data)
-      if (q) setQuant(q.data)
+      if (q) setQuant(q)
       setLoading(false)
     })
   }, [ticker])
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault()
+    if (!searchQuery.trim()) return
+    setSearching(true)
+    setSearchResults([])
+    try {
+      const r = await api.post("/api/v1/documents/search", {
+        query: searchQuery,
+        ticker,
+        limit: 5,
+      })
+      setSearchResults(r.data.results ?? [])
+    } catch {
+      setSearchResults([])
+    }
+    setSearching(false)
+  }
 
   const p = metrics?.price_data ?? {}
   const inc = metrics?.income_statement ?? {}
@@ -98,6 +147,7 @@ export default function DataPanel({ ticker }: { ticker: string }) {
           <TabsList className="mx-3 mt-2 mb-1 h-8">
             <TabsTrigger value="overview" className="text-xs flex-1">Overview</TabsTrigger>
             <TabsTrigger value="filings" className="text-xs flex-1">Filings</TabsTrigger>
+            <TabsTrigger value="search" className="text-xs flex-1">Search</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="flex-1 overflow-hidden m-0">
@@ -164,6 +214,41 @@ export default function DataPanel({ ticker }: { ticker: string }) {
                   ))}
                 </div>
               )}
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="search" className="flex-1 overflow-hidden m-0 flex flex-col">
+            <form onSubmit={handleSearch} className="px-3 pt-3 pb-2 flex gap-2">
+              <input
+                ref={inputRef}
+                className="flex-1 text-xs bg-background border border-border rounded-md px-3 py-1.5 outline-none focus:ring-1 focus:ring-ring"
+                placeholder={`Search ${ticker} filings…`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <button
+                type="submit"
+                disabled={searching}
+                className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground disabled:opacity-50"
+              >
+                {searching ? "…" : "Go"}
+              </button>
+            </form>
+            <ScrollArea className="flex-1 px-3 pb-4">
+              {searchResults.length === 0 && !searching && (
+                <p className="text-xs text-muted-foreground px-1 pt-2">
+                  Search the full text of {ticker} SEC filings using semantic similarity.
+                </p>
+              )}
+              {searchResults.map((r) => (
+                <div key={r.id} className="mb-3 p-3 rounded-md bg-accent/50 text-xs">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-muted-foreground">Chunk {r.chunk_index}</span>
+                    <span className="text-muted-foreground">{(r.similarity * 100).toFixed(0)}% match</span>
+                  </div>
+                  <p className="leading-relaxed line-clamp-6">{r.text}</p>
+                </div>
+              ))}
             </ScrollArea>
           </TabsContent>
         </Tabs>
