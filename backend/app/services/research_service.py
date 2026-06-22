@@ -108,3 +108,55 @@ async def run_research(
     if not context:
         await cache_set(cache_key, result, ttl=21600)
     return result
+
+
+async def run_comparison(
+    db: AsyncSession,
+    question: str,
+    tickers: list[str],
+    context: list[dict] | None = None,
+    workflow_run_id: int | None = None,
+) -> dict:
+    context_text = ""
+    if context:
+        prior = context[-3:]
+        lines = [f"Q: {c['question']}\nA: {c['report'][:600]}" for c in prior]
+        context_text = "Prior research in this session:\n" + "\n\n".join(lines) + "\n\n"
+
+    observations = []
+    for ticker in tickers:
+        try:
+            result = await call_tool("get_company_metrics", {"ticker": ticker}, db)
+            observations.append(f"=== {ticker} ===\n{json.dumps(result, indent=2)}")
+        except Exception as e:
+            observations.append(f"=== {ticker} ===\nError fetching data: {e}")
+
+    observations_text = "\n\n".join(observations)
+    label = " vs ".join(tickers)
+
+    synthesis_messages = [
+        {
+            "role": "user",
+            "content": (
+                f"{context_text}"
+                f"You are a financial analyst comparing {label}.\n\n"
+                f"Financial data:\n\n{observations_text}\n\n"
+                f"Write a comprehensive comparison in plain English answering: {question}\n\n"
+                f"Highlight key differences in valuation, profitability, and financial health. "
+                f"Conclude with which company looks stronger on each dimension.\n"
+                f"Do not use JSON. Write your analysis directly."
+            ),
+        }
+    ]
+
+    report_chunks: list[str] = []
+    if workflow_run_id:
+        from app.core.redis_client import publish_workflow_event
+        async for token in chat_stream(synthesis_messages):
+            report_chunks.append(token)
+            await publish_workflow_event(workflow_run_id, {"type": "chunk", "content": token})
+    else:
+        report_chunks.append(chat(synthesis_messages))
+
+    report = "".join(report_chunks)
+    return {"question": question, "tickers": tickers, "observations": observations, "report": report}

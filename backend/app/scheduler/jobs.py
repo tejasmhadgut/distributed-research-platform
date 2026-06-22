@@ -28,7 +28,8 @@ async def daily_price_update():
 
     for ticker in tickers:
         await _publish("task_queue", {"task_type": "fetch_metrics", "ticker": ticker})
-        print(f"[scheduler] queued price update for {ticker}")
+        await _publish("quant_tasks", {"ticker": ticker})
+        print(f"[scheduler] queued price update + quant recompute for {ticker}")
 
 
 async def weekly_filing_refresh():
