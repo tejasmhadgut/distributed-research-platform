@@ -1,60 +1,77 @@
 import asyncio
-import yfinance as yf
+import pandas as pd
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc
 from app.models.financial_data import CompanyMetrics
 from app.core.cache import cache_delete
 from app.core.cache_decorator import cached
-from app.models.financial_data import CompanyMetrics
-from sqlalchemy import select, desc
 
 
-def _fetch_yfinance(ticker: str) -> dict:
-    import time
-    stock = yf.Ticker(ticker)
-
-    hist = stock.history(period="1mo")
-    price_data = {
-        "history": hist.reset_index().to_dict(orient="records") if not hist.empty else []
-    }
-    time.sleep(2)
-
+def _get_statement_value(data: pd.DataFrame, row_name: str) -> float | None:
+    row = data[data['Breakdown'] == row_name]
+    if row.empty:
+        return None
+    date_cols = sorted([c for c in data.columns if c != 'Breakdown'], reverse=True)
+    if not date_cols:
+        return None
+    val = row.iloc[0][date_cols[0]]
+    if val == '*' or pd.isna(val):
+        return None
     try:
-        fast = stock.fast_info
-        price_data.update({
-            "current_price": fast.get("lastPrice"),
-            "market_cap": fast.get("marketCap"),
-            "52w_high": fast.get("yearHigh"),
-            "52w_low": fast.get("yearLow"),
-        })
-        info = dict(fast)
-    except Exception:
-        info = {}
-    time.sleep(2)
+        return float(val)
+    except (TypeError, ValueError):
+        return None
 
-    try:
-        income_stmt = stock.income_stmt
-        income_data = income_stmt.to_dict() if income_stmt is not None and not income_stmt.empty else {}
-    except Exception:
-        income_data = {}
-    time.sleep(2)
 
-    try:
-        balance = stock.balance_sheet
-        balance_data = balance.to_dict() if balance is not None and not balance.empty else {}
-    except Exception:
-        balance_data = {}
+def _fetch_defeatbeta(ticker: str) -> dict:
+    from defeatbeta_api.data.ticker import Ticker
+    t = Ticker(ticker.upper())
+
+    price_df = t.price()
+    price_df = price_df.sort_values('report_date')
+    recent = price_df.tail(252)
+
+    current_price = float(price_df.iloc[-1]['close']) if not price_df.empty else None
+    week52_high = float(recent['high'].max()) if not recent.empty else None
+    week52_low = float(recent['low'].min()) if not recent.empty else None
+
+    market_cap_df = t.market_capitalization()
+    market_cap = float(market_cap_df.iloc[-1]['market_capitalization']) if not market_cap_df.empty else None
+
+    pe_df = t.ttm_pe()
+    pe_ratio = float(pe_df.iloc[-1]['ttm_pe']) if not pe_df.empty else None
+
+    inc_data = t.annual_income_statement().data
+    total_revenue = _get_statement_value(inc_data, 'Total Revenue')
+    net_income = _get_statement_value(inc_data, 'Net Income Common Stockholders')
+
+    bal_data = t.annual_balance_sheet().data
+    total_assets = _get_statement_value(bal_data, 'Total Assets')
+    total_debt = _get_statement_value(bal_data, 'Total Debt')
 
     return {
-        "price_data": price_data,
-        "income_data": income_data,
-        "balance_data": balance_data,
-        "raw": info
+        "price_data": {
+            "current_price": current_price,
+            "fifty_two_week_high": week52_high,
+            "fifty_two_week_low": week52_low,
+            "pe_ratio": pe_ratio,
+            "market_cap": market_cap,
+        },
+        "income_data": {
+            "total_revenue": total_revenue,
+            "net_income": net_income,
+        },
+        "balance_data": {
+            "total_assets": total_assets,
+            "total_debt": total_debt,
+        },
+        "raw": {}
     }
 
 
 async def fetch_and_store_metrics(db: AsyncSession, ticker: str) -> CompanyMetrics:
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(None, _fetch_yfinance, ticker)
+    data = await loop.run_in_executor(None, _fetch_defeatbeta, ticker)
 
     metrics = CompanyMetrics(
         ticker=ticker.upper(),
