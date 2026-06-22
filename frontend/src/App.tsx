@@ -1,7 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom"
 import { useAuth } from "./contexts/AuthContext"
+import { SessionsProvider } from "./contexts/SessionsContext"
 import LoginPage from "./pages/LoginPage"
 import RegisterPage from "./pages/RegisterPage"
+import WorkspacePage from "./pages/WorkspacePage"
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -14,12 +16,11 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/session/:sessionId" element={
+          <ProtectedRoute><SessionsProvider><WorkspacePage /></SessionsProvider></ProtectedRoute>
+        } />
         <Route path="*" element={
-          <ProtectedRoute>
-            <div className="flex items-center justify-center h-screen bg-background text-foreground">
-              <p>Workspace coming soon</p>
-            </div>
-          </ProtectedRoute>
+          <ProtectedRoute><SessionsProvider><WorkspacePage /></SessionsProvider></ProtectedRoute>
         } />
       </Routes>
     </div>

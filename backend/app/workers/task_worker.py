@@ -34,7 +34,7 @@ async def handle_task(message: aio_pika.IncomingMessage) -> None:
             })
 
             try:
-                result = await execute_task(db, task_type, input_data)
+                result = await execute_task(db, task_type, input_data, workflow_run_id)
                 final_status = "completed"
                 await db.execute(
                     update(WorkflowTask)
@@ -54,11 +54,13 @@ async def handle_task(message: aio_pika.IncomingMessage) -> None:
             await publish_workflow_event(workflow_run_id, {
                 "task_id": task_id,
                 "task_type": task_type,
-                "status": final_status
+                "status": final_status,
+                "result": result if final_status == "completed" else None,
             })
 
 
-async def execute_task(db, task_type: str, input_data: dict) -> dict:
+
+async def execute_task(db, task_type: str, input_data: dict, workflow_run_id: int | None = None) -> dict:
     ticker = input_data.get("ticker", "AAPL")
 
     if task_type == "fetch_metrics":
@@ -90,7 +92,8 @@ async def execute_task(db, task_type: str, input_data: dict) -> dict:
         from app.services.research_service import run_research
         question = input_data.get("question", "Analyze this company")
         ticker = input_data.get("ticker", "AAPL")
-        result = await run_research(db, question, ticker)
+        context = input_data.get("context", [])
+        result = await run_research(db, question, ticker, context=context or None, workflow_run_id=workflow_run_id)
         return result
 
 
