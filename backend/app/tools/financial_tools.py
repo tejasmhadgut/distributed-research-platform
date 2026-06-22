@@ -15,7 +15,12 @@ class TickerInput(BaseModel):
 )
 async def get_company_metrics(input: TickerInput, db) -> dict:
     metrics = await fetch_and_store_metrics(db, input.ticker)
-    return {"metrics_id": metrics.id, "ticker": metrics.ticker}
+    return {
+        "ticker": metrics.ticker,
+        "price_data": metrics.price_data,
+        "income_statement": metrics.income_statement,
+        "balance_sheet": metrics.balance_sheet,
+    }
 
 
 @tool(
@@ -25,7 +30,13 @@ async def get_company_metrics(input: TickerInput, db) -> dict:
 )
 async def search_filings(input: TickerInput, db) -> dict:
     filings = await fetch_and_store_filings(db, input.ticker)
-    return {"filing_ids": [f.id for f in filings], "ticker": input.ticker}
+    return {
+        "ticker": input.ticker,
+        "filings": [
+            {"form_type": f.form_type, "filed_at": str(f.filed_at), "filing_url": f.filing_url}
+            for f in filings
+        ],
+    }
 
 
 @tool(
