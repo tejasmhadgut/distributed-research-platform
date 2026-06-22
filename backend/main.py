@@ -10,11 +10,23 @@ from app.api.routes.quant import router as quant_router
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.core.logging import setup_logging
 setup_logging()
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 
 app = FastAPI(title="Distributed Research Platform")
 
+
 app.add_middleware(RateLimitMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(sessions.router, prefix="/api/v1")
