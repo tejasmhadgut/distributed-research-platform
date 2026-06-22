@@ -1,8 +1,9 @@
-import { useEffect, useCallback } from "react"
+import { useEffect, useCallback, useState } from "react"
 import { useParams } from "react-router-dom"
 import Sidebar from "../components/Sidebar"
 import ResearchThread from "../components/ResearchThread"
 import ResearchInput from "../components/ResearchInput"
+import DataPanel from "../components/DataPanel"
 import { useWebSocket } from "../hooks/useWebSocket"
 import { useSessions } from "../contexts/SessionsContext"
 import api from "../lib/api"
@@ -13,12 +14,14 @@ export default function WorkspacePage() {
   const { messages, connected, loading, send, setInitialMessages } = useWebSocket(id)
   const { sessions, updateTitle } = useSessions()
   const currentSession = sessions.find((s) => s.id === id)
+  const [currentTicker, setCurrentTicker] = useState<string | null>(null)
 
   const handleSend = useCallback((question: string, ticker: string) => {
     if (id && messages.length === 0) {
       const label = ticker ? `[${ticker.toUpperCase()}] ${question}` : question
       updateTitle(id, label.slice(0, 60))
     }
+    if (ticker) setCurrentTicker(ticker.toUpperCase())
     send(question, ticker)
   }, [id, messages.length, send, updateTitle])
 
@@ -50,8 +53,13 @@ export default function WorkspacePage() {
                 {connected ? "● connected" : "○ connecting"}
               </span>
             </div>
-            <ResearchThread messages={messages} loading={loading} />
-            <ResearchInput onSend={handleSend} connected={connected} />
+            <div className="flex flex-1 overflow-hidden">
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <ResearchThread messages={messages} loading={loading} />
+                <ResearchInput onSend={handleSend} connected={connected} />
+              </div>
+              {currentTicker && <DataPanel ticker={currentTicker} />}
+            </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
