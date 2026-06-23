@@ -19,4 +19,4 @@ pgvector==0.3.6
 ollama==0.4.4
 nltk==3.9.1
 apscheduler==3.10.4
-pandas==2.2.3
+pandas>=3.0.1
