@@ -11,7 +11,7 @@ class QuantRequest(BaseModel):
     ticker: str
 
 
-@router.post("/")
+@router.post("")
 async def run_quant(req: QuantRequest, db: AsyncSession = Depends(get_db)):
     try:
         result = await compute_quant(db, req.ticker.upper())

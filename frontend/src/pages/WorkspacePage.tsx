@@ -11,10 +11,15 @@ import api from "../lib/api"
 export default function WorkspacePage() {
   const { sessionId } = useParams()
   const id = sessionId ? parseInt(sessionId) : null
-  const { messages, connected, loading, send, setInitialMessages } = useWebSocket(id)
+  const [currentTickers, setCurrentTickers] = useState<string[]>([])
+  const [extracting, setExtracting] = useState(false)
+  const { messages, connected, loading, statusMessage, send, setInitialMessages } = useWebSocket(
+    id,
+    (tickers) => { setCurrentTickers(tickers); setExtracting(false) },
+    () => setExtracting(false),
+  )
   const { sessions, updateTitle } = useSessions()
   const currentSession = sessions.find((s) => s.id === id)
-  const [currentTicker, setCurrentTicker] = useState<string | null>(null)
 
   const handleSend = useCallback((question: string, ticker: string, tickers?: string[]) => {
     if (id && messages.length === 0) {
@@ -26,7 +31,13 @@ export default function WorkspacePage() {
           : question
       updateTitle(id, label.slice(0, 60))
     }
-    if (ticker) setCurrentTicker(ticker.toUpperCase())
+    if (tickers && tickers.length > 1) {
+      setCurrentTickers(tickers.map((t) => t.toUpperCase()))
+    } else if (ticker) {
+      setCurrentTickers([ticker.toUpperCase()])
+    } else {
+      setExtracting(true)
+    }
     send(question, ticker, tickers)
   }, [id, messages.length, send, updateTitle])
 
@@ -60,10 +71,10 @@ export default function WorkspacePage() {
             </div>
             <div className="flex flex-1 overflow-hidden">
               <div className="flex flex-col flex-1 overflow-hidden">
-                <ResearchThread messages={messages} loading={loading} />
+                <ResearchThread messages={messages} loading={loading} statusMessage={statusMessage} />
                 <ResearchInput onSend={handleSend} connected={connected} />
               </div>
-              {currentTicker && <DataPanel ticker={currentTicker} />}
+              {(extracting || currentTickers.length > 0) && <DataPanel tickers={currentTickers} researchLoading={loading} extracting={extracting} statusMessage={statusMessage} />}
             </div>
           </>
         ) : (

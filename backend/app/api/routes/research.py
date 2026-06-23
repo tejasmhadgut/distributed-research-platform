@@ -17,7 +17,7 @@ class ResearchRequest(BaseModel):
     ticker: str
 
 
-@router.post("/")
+@router.post("")
 async def start_research(
     body: ResearchRequest,
     db: AsyncSession = Depends(get_db),
