@@ -51,7 +51,8 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-export default function DataPanel({ ticker }: { ticker: string }) {
+export default function DataPanel({ tickers, researchLoading, extracting, statusMessage }: { tickers: string[]; researchLoading?: boolean; extracting?: boolean; statusMessage?: string }) {
+  const [activeTicker, setActiveTicker] = useState(tickers[0])
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [filings, setFilings] = useState<Filing[]>([])
   const [quant, setQuant] = useState<QuantData | null>(null)
@@ -60,44 +61,91 @@ export default function DataPanel({ ticker }: { ticker: string }) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const prevResearchLoading = useRef<boolean | undefined>(undefined)
+  const cache = useRef<Map<string, { metrics: Metrics | null; filings: Filing[]; quant: QuantData | null }>>(new Map())
+
 
   useEffect(() => {
-    if (!ticker) return
-    setLoading(true)
-    setMetrics(null)
-    setFilings([])
-    setQuant(null)
+    setActiveTicker(tickers[0])
+  }, [tickers.join(",")])
+
+  const ticker = activeTicker
+
+  useEffect(() => {
+    const justFinished = prevResearchLoading.current === true && researchLoading === false
+    prevResearchLoading.current = researchLoading
+    if (justFinished && !metrics) {
+      cache.current.delete(ticker)
+      fetchData()
+    }
+  }, [researchLoading])
+
+  useEffect(() => {
+    if (!statusMessage || metrics || !ticker) return
+    if (statusMessage.includes("Generating") || statusMessage.includes("Comparing")) {
+      cache.current.delete(ticker)
+      fetchData()
+    }
+  }, [statusMessage])
+
+
+  function fetchData() {
+  if (!ticker) return
+
+  const cached = cache.current.get(ticker)
+  if (cached) {
+    setMetrics(cached.metrics)
+    setFilings(cached.filings)
+    setQuant(cached.quant)
     setSearchResults([])
     setSearchQuery("")
+    return
+  }
 
-    const fetchQuant = async () => {
-      try {
-        const r = await api.get(`/api/v1/quant/${ticker}`)
-        return r.data
-      } catch (e: any) {
-        if (e?.response?.status === 404) {
-          try {
-            await api.post("/api/v1/quant/", { ticker })
-            const r = await api.get(`/api/v1/quant/${ticker}`)
-            return r.data
-          } catch {
-            return null
-          }
+  setLoading(true)
+  setMetrics(null)
+  setFilings([])
+  setQuant(null)
+  setSearchResults([])
+  setSearchQuery("")
+
+  const fetchQuant = async () => {
+    try {
+      const r = await api.get(`/api/v1/quant/${ticker}`)
+      return r.data
+    } catch (e: any) {
+      if (e?.response?.status === 404) {
+        try {
+          await api.post("/api/v1/quant", { ticker })
+          const r = await api.get(`/api/v1/quant/${ticker}`)
+          return r.data
+        } catch {
+          return null
         }
-        return null
       }
+      return null
     }
+  }
 
-    Promise.all([
-      api.get(`/api/v1/financial/metrics/${ticker}`).catch(() => null),
-      api.get(`/api/v1/financial/filings/${ticker}`).catch(() => null),
-      fetchQuant(),
-    ]).then(([m, f, q]) => {
-      if (m) setMetrics(m.data)
-      if (f) setFilings(f.data)
-      if (q) setQuant(q)
-      setLoading(false)
-    })
+  Promise.all([
+    api.get(`/api/v1/financial/metrics/${ticker}`).catch(() => null),
+    api.get(`/api/v1/financial/filings/${ticker}`).catch(() => null),
+    fetchQuant(),
+  ]).then(([m, f, q]) => {
+    const metrics = m ? m.data : null
+    const filings = f ? f.data : []
+    const quant = q ?? null
+    setMetrics(metrics)
+    setFilings(filings)
+    setQuant(quant)
+    setLoading(false)
+    cache.current.set(ticker, { metrics, filings, quant })
+  })
+}
+
+
+  useEffect(() => {
+    fetchData()
   }, [ticker])
 
   async function handleSearch(e: React.FormEvent) {
@@ -123,12 +171,49 @@ export default function DataPanel({ ticker }: { ticker: string }) {
   const bal = metrics?.balance_sheet ?? {}
   const qm = quant?.metrics ?? {}
 
+  if (extracting) {
+    return (
+      <aside className="w-72 shrink-0 border-l border-border flex flex-col bg-card">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          <span className="text-xs text-muted-foreground">Identifying companies…</span>
+        </div>
+        <div className="flex-1 px-4 pt-4 space-y-4">
+          {[70, 50, 80, 45, 65].map((w, i) => (
+            <div key={i} className="flex flex-col gap-1.5">
+              <div className="h-2 w-16 rounded bg-muted animate-pulse" />
+              <div className="h-3 rounded bg-muted animate-pulse" style={{ width: `${w}%` }} />
+            </div>
+          ))}
+        </div>
+      </aside>
+    )
+  }
+
   return (
     <aside className="w-72 shrink-0 border-l border-border flex flex-col bg-card">
       <div className="px-4 py-3 border-b border-border">
-        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          {ticker}
-        </span>
+        {tickers.length > 1 ? (
+          <div className="flex gap-1">
+            {tickers.map((t) => (
+              <button
+                key={t}
+                onClick={() => setActiveTicker(t)}
+                className={`text-xs px-2 py-0.5 rounded-md font-semibold uppercase tracking-widest transition-colors ${
+                  t === activeTicker
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            {ticker}
+          </span>
+        )}
         {metrics && (
           <p className="text-[11px] text-muted-foreground mt-0.5">
             Updated {new Date(metrics.fetched_at).toLocaleDateString()}
@@ -158,7 +243,9 @@ export default function DataPanel({ ticker }: { ticker: string }) {
           <TabsContent value="overview" className="flex-1 overflow-hidden m-0">
             <ScrollArea className="h-full px-4 pb-4">
               {!metrics ? (
-                <p className="text-xs text-muted-foreground pt-4">No data available. Run a research query on {ticker} first.</p>
+                <p className="text-xs text-muted-foreground pt-4">
+                  {researchLoading ? "Fetching data…" : `No data available. Run a research query on ${ticker} first.`}
+                </p>
               ) : (
                 <div className="space-y-5 pt-3">
                   <section>

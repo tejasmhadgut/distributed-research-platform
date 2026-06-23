@@ -8,6 +8,7 @@ from app.core.database import AsyncSessionLocal
 from app.models.research_session import ResearchSession
 from app.models.workflow import WorkflowRun, WorkflowTask
 from app.services.workflow_service import create_workflow
+from app.services.llm_service import extract_tickers
 
 router = APIRouter()
 
@@ -65,6 +66,16 @@ async def session_ws(
                 question = data.get("question", "")
                 ticker = data.get("ticker", "")
                 tickers = data.get("tickers", [])
+
+                if not ticker and not tickers:
+                    await websocket.send_json({"type": "status_update", "message": "Identifying companies…"})
+                    extracted = extract_tickers(question)
+                    if len(extracted) > 1:
+                        tickers = extracted
+                    elif len(extracted) == 1:
+                        ticker = extracted[0]
+                    if extracted:
+                        await websocket.send_json({"type": "tickers_detected", "tickers": extracted})
 
                 prior_runs_result = await db.execute(
                     select(WorkflowRun)

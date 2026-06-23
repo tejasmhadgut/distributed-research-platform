@@ -58,6 +58,11 @@ async def run_research(
 
     observations = []
 
+    async def _publish(msg: str) -> None:
+        if workflow_run_id:
+            from app.core.redis_client import publish_workflow_event
+            await publish_workflow_event(workflow_run_id, {"type": "status_update", "message": msg})
+
     for turn in range(MAX_TURNS):
         response = chat(messages)
         messages.append({"role": "assistant", "content": response})
@@ -70,6 +75,14 @@ async def run_research(
         tool_name = tool_call["tool"]
         tool_input = tool_call["input"]
 
+        label_map = {
+            "get_company_metrics": "Fetching financial metrics…",
+            "search_filings": "Searching SEC filings…",
+            "embed_filings": "Indexing filing documents…",
+            "search_document_chunks": "Searching filing text…",
+        }
+        await _publish(label_map.get(tool_name, f"Running {tool_name}…"))
+
         try:
             result = await call_tool(tool_name, tool_input, db)
         except Exception as e:
@@ -81,13 +94,19 @@ async def run_research(
         messages.append({"role": "user", "content": f"Tool result:\n{observation}\n\nContinue researching or respond with {{\"done\": true}} if you have enough information."})
 
     observations_text = "\n\n".join(observations) if observations else "No data was retrieved."
+    await _publish("Generating analysis…")
     synthesis_messages = [
         {
             "role": "user",
             "content": (
                 f"You are a financial analyst. Here is research data collected about {ticker}:\n\n"
                 f"{observations_text}\n\n"
-                f"Write a comprehensive analysis in plain English paragraphs answering: {question}\n\n"
+                f"Write a comprehensive analysis answering: {question}\n\n"
+                f"Format your response in Markdown:\n"
+                f"- Use ## for section headings\n"
+                f"- Use **bold** for key figures and conclusions\n"
+                f"- Use bullet points for lists of metrics or factors\n"
+                f"- End with a ## Summary section with a concise verdict\n\n"
                 f"Do not use JSON. Do not call any tools. Write your analysis directly."
             ),
         }
@@ -95,7 +114,6 @@ async def run_research(
 
     report_chunks: list[str] = []
     if workflow_run_id:
-        from app.core.redis_client import publish_workflow_event
         async for token in chat_stream(synthesis_messages):
             report_chunks.append(token)
             await publish_workflow_event(workflow_run_id, {"type": "chunk", "content": token})
@@ -123,8 +141,14 @@ async def run_comparison(
         lines = [f"Q: {c['question']}\nA: {c['report'][:600]}" for c in prior]
         context_text = "Prior research in this session:\n" + "\n\n".join(lines) + "\n\n"
 
+    async def _publish_cmp(msg: str) -> None:
+        if workflow_run_id:
+            from app.core.redis_client import publish_workflow_event
+            await publish_workflow_event(workflow_run_id, {"type": "status_update", "message": msg})
+
     observations = []
     for ticker in tickers:
+        await _publish_cmp(f"Fetching data for {ticker}…")
         try:
             result = await call_tool("get_company_metrics", {"ticker": ticker}, db)
             observations.append(f"=== {ticker} ===\n{json.dumps(result, indent=2)}")
@@ -133,6 +157,7 @@ async def run_comparison(
 
     observations_text = "\n\n".join(observations)
     label = " vs ".join(tickers)
+    await _publish_cmp(f"Comparing {label}…")
 
     synthesis_messages = [
         {
@@ -141,9 +166,12 @@ async def run_comparison(
                 f"{context_text}"
                 f"You are a financial analyst comparing {label}.\n\n"
                 f"Financial data:\n\n{observations_text}\n\n"
-                f"Write a comprehensive comparison in plain English answering: {question}\n\n"
-                f"Highlight key differences in valuation, profitability, and financial health. "
-                f"Conclude with which company looks stronger on each dimension.\n"
+                f"Write a comprehensive comparison answering: {question}\n\n"
+                f"Format your response in Markdown:\n"
+                f"- Use ## for section headings (e.g. ## Valuation, ## Profitability)\n"
+                f"- Use a Markdown table to compare key metrics side by side\n"
+                f"- Use **bold** for the stronger company on each metric\n"
+                f"- End with a ## Verdict section naming the stronger company overall\n\n"
                 f"Do not use JSON. Write your analysis directly."
             ),
         }
@@ -151,7 +179,6 @@ async def run_comparison(
 
     report_chunks: list[str] = []
     if workflow_run_id:
-        from app.core.redis_client import publish_workflow_event
         async for token in chat_stream(synthesis_messages):
             report_chunks.append(token)
             await publish_workflow_event(workflow_run_id, {"type": "chunk", "content": token})

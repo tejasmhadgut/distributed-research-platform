@@ -1,4 +1,4 @@
-import { useState, KeyboardEvent } from "react"
+import { useState, type KeyboardEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -41,7 +41,7 @@ export default function ResearchInput({ onSend, connected }: Props) {
       <div className="flex items-center gap-2">
         <Input
           className="w-24 shrink-0 uppercase text-xs h-8"
-          placeholder={compareMode ? "Ticker 1" : "Ticker"}
+          placeholder={compareMode ? "Ticker 1" : "AAPL (optional)"}
           value={ticker}
           onChange={(e) => setTicker(e.target.value.toUpperCase())}
           disabled={!connected}
