@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react"
-import { Session } from "../types"
+import type { Session } from "../types"
 import api from "../lib/api"
 
 interface SessionsContextValue {

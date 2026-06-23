@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 
 interface AuthContextType {
   token: string | null
@@ -23,6 +23,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("token")
     setToken(null)
   }
+
+  useEffect(() => {
+    const handler = () => logout()
+    window.addEventListener("auth:expired", handler)
+    return () => window.removeEventListener("auth:expired", handler)
+  }, [])
 
   return (
     <AuthContext.Provider value={{ token, login, logout, isAuthenticated: !!token }}>

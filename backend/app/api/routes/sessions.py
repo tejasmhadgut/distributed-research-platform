@@ -18,7 +18,7 @@ class CreateSessionRequest(BaseModel):
 class UpdateSessionRequest(BaseModel):
     title: str
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_session(
     body: CreateSessionRequest,
     db: AsyncSession = Depends(get_db),
@@ -34,7 +34,7 @@ async def create_session(
     await db.refresh(session)
     return {"id": session.id, "title": session.title, "description": session.description}
 
-@router.get("/")
+@router.get("")
 async def list_sessions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)

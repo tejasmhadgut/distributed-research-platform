@@ -16,7 +16,7 @@ class CreateWorkflowRequest(BaseModel):
     workflow_type: str = "compare_companies"
     input_data: dict = {}
 
-@router.post("/")
+@router.post("")
 async def start_workflow(
     body: CreateWorkflowRequest,
     db: AsyncSession = Depends(get_db),

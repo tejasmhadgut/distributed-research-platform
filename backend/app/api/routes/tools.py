@@ -11,7 +11,7 @@ class ToolCallRequest(BaseModel):
     input_data: dict
 
 
-@router.get("/")
+@router.get("")
 async def get_tools():
     return {"tools": list_tools()}
 

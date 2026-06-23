@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 
 
-app = FastAPI(title="Distributed Research Platform")
+app = FastAPI(title="Distributed Research Platform", redirect_slashes=False)
 
 
 app.add_middleware(RateLimitMiddleware)
