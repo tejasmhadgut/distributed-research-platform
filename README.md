@@ -4,39 +4,9 @@ An AI-powered investment research platform built as a distributed system. Analys
 
 ---
 
-## Architecture
+## System Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                        React UI (Vite)                       │
-│  ResearchThread · DataPanel · Sidebar · ResearchInput        │
-└──────────────────────────┬───────────────────────────────────┘
-                           │  WebSocket (streaming) + REST
-                           ▼
-┌──────────────────────────────────────────────────────────────┐
-│                   FastAPI  (API server)                      │
-│  JWT auth · Rate limiting · Session management · WS relay    │
-└──────┬────────────────────────────────────────┬─────────────┘
-       │ creates workflow run                   │ pub/sub
-       ▼                                        ▼
-┌─────────────┐                         ┌─────────────┐
-│  PostgreSQL │                         │    Redis    │
-│  + pgvector │                         │  cache · RL │
-│  DAG state  │                         │  streaming  │
-└──────┬──────┘                         └─────────────┘
-       │ dispatches tasks
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│                        RabbitMQ                              │
-└──────┬───────────────────────────┬────────────────┬─────────┘
-       │                           │                │
-       ▼                           ▼                ▼
-┌─────────────────┐   ┌────────────────────┐  ┌───────────────┐
-│ Workflow Engine │   │   Task Worker      │  │ Quant Worker  │
-│ DAG scheduler   │   │   ReAct LLM loop   │  │ analytics     │
-└─────────────────┘   │   tool registry    │  └───────────────┘
-                      └────────────────────┘
-```
+![System Architecture](assets/architecture.png)
 
 **Request flow:**
 1. User submits a question → LLM extracts tickers from natural language (Apple → AAPL)
