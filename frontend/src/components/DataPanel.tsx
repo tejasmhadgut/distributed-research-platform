@@ -60,6 +60,8 @@ export default function DataPanel({ tickers, researchLoading, extracting, status
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
+  const [indexing, setIndexing] = useState(false)
+  const [indexMessage, setIndexMessage] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
   const prevResearchLoading = useRef<boolean | undefined>(undefined)
   const cache = useRef<Map<string, { metrics: Metrics | null; filings: Filing[]; quant: QuantData | null }>>(new Map())
@@ -164,6 +166,19 @@ export default function DataPanel({ tickers, researchLoading, extracting, status
       setSearchResults([])
     }
     setSearching(false)
+  }
+
+  async function handleIndex() {
+    setIndexing(true)
+    setIndexMessage("")
+    try {
+      const r = await api.post("/api/v1/documents/index", { ticker })
+      const n = r.data.chunks_stored ?? 0
+      setIndexMessage(n > 0 ? `Indexed ${n} chunks — search ready.` : (r.data.message ?? "No filings to index."))
+    } catch {
+      setIndexMessage("Indexing failed.")
+    }
+    setIndexing(false)
   }
 
   const p = metrics?.price_data ?? {}
@@ -326,6 +341,16 @@ export default function DataPanel({ tickers, researchLoading, extracting, status
                 {searching ? "…" : "Go"}
               </button>
             </form>
+            <div className="px-3 pb-2 flex items-center gap-2">
+              <button
+                onClick={handleIndex}
+                disabled={indexing}
+                className="text-xs px-3 py-1 rounded-md border border-border bg-background hover:bg-accent disabled:opacity-50"
+              >
+                {indexing ? "Indexing…" : "Index Filings"}
+              </button>
+              {indexMessage && <span className="text-xs text-muted-foreground">{indexMessage}</span>}
+            </div>
             <ScrollArea className="flex-1 px-3 pb-4">
               {searchResults.length === 0 && !searching && (
                 <p className="text-xs text-muted-foreground px-1 pt-2">

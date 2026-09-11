@@ -10,7 +10,7 @@ export default function Sidebar() {
   const { logout } = useAuth()
   const { sessionId } = useParams()
   const navigate = useNavigate()
-  const { sessions, createSession, updateTitle } = useSessions()
+  const { sessions, createSession, updateTitle, deleteSession } = useSessions()
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
@@ -36,7 +36,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-64 h-screen flex flex-col border-r border-border bg-card shrink-0">
+    <aside className="w-64 flex flex-col overflow-hidden border-r border-border bg-card shrink-0">
       <div className="p-4">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
           Research Platform
@@ -73,10 +73,23 @@ export default function Sidebar() {
                 <>
                   <span className="truncate flex-1">{s.title}</span>
                   <span
-                    className="opacity-0 group-hover:opacity-60 text-xs px-1 shrink-0"
+                    className="opacity-0 group-hover:opacity-60 text-xs px-1 shrink-0 hover:opacity-100"
                     onClick={(e) => startEditing(s.id, s.title, e)}
+                    title="Rename"
                   >
                     ✎
+                  </span>
+                  <span
+                    className="opacity-0 group-hover:opacity-60 text-xs px-1 shrink-0 hover:opacity-100 hover:text-destructive"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      deleteSession(s.id).then(() => {
+                        if (String(s.id) === sessionId) navigate("/")
+                      })
+                    }}
+                    title="Delete"
+                  >
+                    ✕
                   </span>
                 </>
               )}

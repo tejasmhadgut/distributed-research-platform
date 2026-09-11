@@ -6,6 +6,7 @@ import app.tools.financial_tools  # noqa: F401
 import app.tools.document_tools   # noqa: F401
 import hashlib
 from app.core.cache import cache_get, cache_set
+from app.core.redis_client import publish_workflow_event
 
 MAX_TURNS = 3
 
@@ -60,7 +61,6 @@ async def run_research(
 
     async def _publish(msg: str) -> None:
         if workflow_run_id:
-            from app.core.redis_client import publish_workflow_event
             await publish_workflow_event(workflow_run_id, {"type": "status_update", "message": msg})
 
     for turn in range(MAX_TURNS):
@@ -143,7 +143,6 @@ async def run_comparison(
 
     async def _publish_cmp(msg: str) -> None:
         if workflow_run_id:
-            from app.core.redis_client import publish_workflow_event
             await publish_workflow_event(workflow_run_id, {"type": "status_update", "message": msg})
 
     observations = []

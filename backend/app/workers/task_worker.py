@@ -1,7 +1,7 @@
 import asyncio
 import json
 import aio_pika
-from sqlalchemy import update
+from sqlalchemy import update, text
 from app.core.database import AsyncSessionLocal
 from app.core.config import settings
 from app.core.redis_client import publish_workflow_event
@@ -20,13 +20,15 @@ async def handle_task(message: aio_pika.IncomingMessage) -> None:
         input_data = payload.get("input_data", {})
 
         async with AsyncSessionLocal() as db:
-            await db.execute(
+            claim = await db.execute(
                 update(WorkflowTask)
-                .where(WorkflowTask.id == task_id)
+                .where(WorkflowTask.id == task_id, WorkflowTask.status.in_(["pending","queued"]))
                 .values(status="running")
+                .returning(WorkflowTask.id)
             )
             await db.commit()
-
+            if claim.fetchone() is None:
+                return
             await publish_workflow_event(workflow_run_id, {
                 "task_id": task_id,
                 "task_type": task_type,

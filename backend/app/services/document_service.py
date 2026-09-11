@@ -37,7 +37,7 @@ def _chunk_sentences(text: str) -> list[str]:
             chunks.append(chunk)
     return chunks
 
-async def embed_filing(db: AsyncSession, filing: SECFiling) -> list[DocumentChunk]:
+async def embed_filing(db: AsyncSession, filing: SECFiling, max_chunks: int = 500) -> list[DocumentChunk]:
     if not filing.filing_url:
         return []
 
@@ -46,12 +46,19 @@ async def embed_filing(db: AsyncSession, filing: SECFiling) -> list[DocumentChun
         resp.raise_for_status()
         html = resp.text
 
-    text = _extract_text(html)
-    chunks = _chunk_sentences(text)
+    text = _extract_text(html)[:300_000]
+    chunks = _chunk_sentences(text)[:max_chunks]
+    if not chunks:
+        return []
+
+    from app.services.embedding_service import _get_model
+    import asyncio
+    loop = asyncio.get_event_loop()
+    model = _get_model()
+    vectors = await loop.run_in_executor(None, lambda: model.encode(chunks, batch_size=64, show_progress_bar=False).tolist())
 
     stored = []
-    for idx, chunk_text in enumerate(chunks):
-        vector = await embed_text(chunk_text)
+    for idx, (chunk_text, vector) in enumerate(zip(chunks, vectors)):
         chunk = DocumentChunk(
             filing_id=filing.id,
             ticker=filing.ticker,
@@ -60,8 +67,7 @@ async def embed_filing(db: AsyncSession, filing: SECFiling) -> list[DocumentChun
             embedding=vector,
         )
         db.add(chunk)
-        await db.commit()
-        await db.refresh(chunk)
         stored.append(chunk)
 
+    await db.commit()
     return stored
