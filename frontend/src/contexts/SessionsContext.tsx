@@ -6,6 +6,7 @@ interface SessionsContextValue {
   sessions: Session[]
   createSession: () => Promise<Session>
   updateTitle: (id: number, title: string) => void
+  deleteSession: (id: number) => Promise<void>
 }
 
 const SessionsContext = createContext<SessionsContextValue | null>(null)
@@ -28,8 +29,13 @@ export function SessionsProvider({ children }: { children: React.ReactNode }) {
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, title } : s)))
   }, [])
 
+  const deleteSession = useCallback(async (id: number) => {
+    await api.delete(`/api/v1/sessions/${id}`)
+    setSessions((prev) => prev.filter((s) => s.id !== id))
+  }, [])
+
   return (
-    <SessionsContext.Provider value={{ sessions, createSession, updateTitle }}>
+    <SessionsContext.Provider value={{ sessions, createSession, updateTitle, deleteSession }}>
       {children}
     </SessionsContext.Provider>
   )

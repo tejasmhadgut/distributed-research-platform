@@ -7,12 +7,15 @@ from app.models.workflow import WorkflowRun, WorkflowTask
 
 
 async def dispatch_task(db, task: WorkflowTask, run_id: int) -> None:
-    await db.execute(
+    result = await db.execute(
         update(WorkflowTask)
-        .where(WorkflowTask.id == task.id)
+        .where(WorkflowTask.id == task.id, WorkflowTask.status=="pending")
         .values(status="queued")
+        .returning(WorkflowTask.id)
     )
     await db.commit()
+    if result.fetchone() is None:
+        return
     await publish_task("research_tasks", {
         "task_id": task.id,
         "task_type": task.task_type,

@@ -1,18 +1,21 @@
 import json
-import ollama as ol
-from ollama import AsyncClient
+from groq import Groq, AsyncGroq
+from app.core.config import settings
 
-MODEL = "qwen2.5:7b"
+MODEL = "openai/gpt-oss-120b"
 
 
 def chat(message: list[dict]) -> str:
-    response = ol.chat(model=MODEL, messages=message)
-    return response.message.content
+    client = Groq(api_key=settings.groq_api_key)
+    response = client.chat.completions.create(model=MODEL, messages=message)
+    return response.choices[0].message.content
 
 
 async def chat_stream(messages: list[dict]):
-    async for chunk in await AsyncClient().chat(model=MODEL, messages=messages, stream=True):
-        yield chunk.message.content
+    client = AsyncGroq(api_key=settings.groq_api_key)
+    stream = await client.chat.completions.create(model=MODEL, messages=messages, stream=True)
+    async for chunk in stream:
+        yield chunk.choices[0].delta.content or ""
 
 
 def extract_tickers(question: str) -> list[str]:

@@ -12,14 +12,13 @@ export function useWebSocket(sessionId: number | null, onTickersDetected?: (tick
   const onResearchEndRef = useRef(onResearchEnd)
   useEffect(() => { onTickersDetectedRef.current = onTickersDetected })
   useEffect(() => { onResearchEndRef.current = onResearchEnd })
-  const intentionalClose = useRef(false)
   const retryCount = useRef(0)
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!sessionId) return
 
-    intentionalClose.current = false
+    let closed = false
     const token = localStorage.getItem("token")
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
     const socket = new WebSocket(
@@ -35,7 +34,7 @@ export function useWebSocket(sessionId: number | null, onTickersDetected?: (tick
     socket.onclose = () => {
       setConnected(false)
       setLoading(false)
-      if (!intentionalClose.current && retryCount.current < 3) {
+      if (!closed && retryCount.current < 3) {
         retryCount.current += 1
         retryTimer.current = setTimeout(() => setRetrySignal((s) => s + 1), 1500)
       }
@@ -94,6 +93,17 @@ export function useWebSocket(sessionId: number | null, onTickersDetected?: (tick
           if (last?.streaming) {
             return [...prev.slice(0, -1), { ...last, streaming: false }]
           }
+          if (data.result?.report) {
+            return [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant" as const,
+                content: data.result.report,
+                created_at: new Date().toISOString(),
+              },
+            ]
+          }
           return prev
         })
         onResearchEndRef.current?.()
@@ -109,18 +119,11 @@ export function useWebSocket(sessionId: number | null, onTickersDetected?: (tick
 
     return () => {
       if (retryTimer.current) clearTimeout(retryTimer.current)
-      const alreadyClosed = socket.readyState === WebSocket.CLOSED
-      intentionalClose.current = true
+      closed = true
       socket.close()
       setConnected(false)
       setLoading(false)
-      if (!alreadyClosed) {
-        setMessages([])
-      } else {
-        setMessages((prev) =>
-          prev.map((m) => (m.streaming ? { ...m, streaming: false } : m))
-        )
-      }
+      setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)))
     }
   }, [sessionId, retrySignal])
 

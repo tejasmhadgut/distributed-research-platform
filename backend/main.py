@@ -33,10 +33,10 @@ app.include_router(sessions.router, prefix="/api/v1")
 app.include_router(workflows.router, prefix="/api/v1")
 app.include_router(financial.router, prefix="/api/v1")
 app.include_router(ws.router)
-app.include_router(documents_router)
+app.include_router(documents_router, prefix="/api/v1")
 app.include_router(tools_router)
 app.include_router(research_router)
-app.include_router(quant_router)
+app.include_router(quant_router, prefix="/api/v1")
 
 @app.get("/health")
 async def health():
